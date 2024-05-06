@@ -1,0 +1,10 @@
+# Use custom index for custom packages
+
+# Otherwise use PyPI
+[routes."{project}"]
+source = "http"
+to = "https://pypi.org/simple/{project}/"
+
+[server]
+host = "127.0.0.1"
+port = 8000
