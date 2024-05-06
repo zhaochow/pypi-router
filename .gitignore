@@ -1,0 +1,12 @@
+#### General ####
+**/.DS_Store
+**/._*
+/worktrees
+
+#### Repo-specific ####
+
+
+# Python
+**/__pycache__
+**/*.egg-info
+build
