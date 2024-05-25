@@ -3,7 +3,46 @@ from pathlib import Path
 import subprocess
 import sys
 
-def main():
+import simpleindex
+from simpleindex.routes import Response, Route, Params
+
+import pypi_router.utils as ut
+
+_cache_dir = Path(ut.DEFAULT_CACHE_DIR)
+
+class LocalIndexRoute(Route):
+    async def get_page(self, params: Params) -> Response:
+        path = self.root.joinpath(self.to.format(**params))
+        if path.is_file():
+            return Response(content=path.read_bytes(), media_type='text/html')
+        if path.is_dir():
+            html = (path / 'index.html').read_text()
+            return Response(content=html, media_type='text/html')
+        return Response(status_code=404, content='Not Found')
+
+    async def get_file(self, params: Params, filename: str) -> Response:
+        path = self.root.joinpath(self.to.format(**params), filename)
+        if path.suffix not in ('.whl', '.metadata'):
+            return await super().get_file(params, filename)
+
+        if path.suffix == '.whl':
+            index_dir = path.parent
+            path = _cache_dir.joinpath(index_dir.name, 'dist', path.name)
+            if not path.is_file():
+                ut.build_wheel(path, index_dir)
+            media_type = 'application/zip'
+        else:
+            media_type = 'application/octet-stream'
+
+        if not path.is_file():
+            return await super().get_file(params, filename)
+
+        data = path.read_bytes()
+        return Response(status_code=200, content=data, media_type=media_type)
+
+def main(*args):
+    global _cache_dir
+    if len(args) < 1: args = None
     parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
     group = parser.add_mutually_exclusive_group(required=True)
     # group.add_argument('--pypi-repo') # TODO
@@ -12,16 +51,13 @@ def main():
                         help='simpleindex source')
     parser.add_argument('--pypi-port', type=int, default=8001,
                         help='http.server port')
-    parser.add_argument(
-        '--cache-dir',
-        default=str(Path.home().joinpath('.cache', 'pypi-router')),
-        help='Cache directory',
-    )
+    parser.add_argument('--cache-dir', default=str(_cache_dir),
+                        help='Cache directory')
     parser.add_argument('--config', help='simpleindex configuration')
     parser.add_argument('--port', type=int, help='simpleindex port')
-    args = parser.parse_args()
+    args = parser.parse_args(args)
 
-    cache_dir = Path(args.cache_dir).resolve()
+    _cache_dir = Path(args.cache_dir).resolve()
 
     if args.pypi_path is None:
         raise NotImplementedError()
@@ -51,8 +87,8 @@ def main():
         if args.port is not None:
             cfg[-1] = f"port = {args.port}\n"
 
-        cache_dir.mkdir(parents=True, exist_ok=True)
-        cfg_path = cache_dir.joinpath('config.toml')
+        _cache_dir.mkdir(parents=True, exist_ok=True)
+        cfg_path = _cache_dir.joinpath('config.toml')
         with open(cfg_path, 'w', encoding='utf-8') as f:
             f.writelines(cfg)
     else:
