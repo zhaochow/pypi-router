@@ -15,6 +15,7 @@ description = "Simple package for routing Python packages to specific indexes"
 readme = "README.md"
 requires-python = ">=3.8"
 dependencies = [
+  "build",
   "simpleindex",
 ]
 
