@@ -42,7 +42,8 @@ def main(*args):
     global _cache_dir
     if len(args) < 1: args = None
     parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
-    parser.add_argument('-l', '--package-list')
+    parser.add_argument('-l', '--package-list',
+                        help='Path to package list file')
     parser.add_argument('-i', '--pypi-index', help='Path to custom index')
     parser.add_argument('-c', '--config', help='simpleindex configuration')
     parser.add_argument('--cache-dir', default=str(_cache_dir),
