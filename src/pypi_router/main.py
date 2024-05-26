@@ -14,7 +14,7 @@ class LocalIndexRoute(Route):
         if path.is_file():
             return Response(content=path.read_bytes(), media_type='text/html')
         if path.is_dir():
-            html = (path / 'index.html').read_text()
+            html = (path / 'index.html').read_bytes()
             return Response(content=html, media_type='text/html')
         return Response(status_code=404, content='Not Found')
 
