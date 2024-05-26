@@ -4,6 +4,8 @@ import re
 import subprocess
 import sys
 
+DEFAULT_CACHE_DIR = str(Path.home().joinpath('.cache', 'pypi-router'))
+
 _GIT_REPO_PATTERN = re.compile(r'<a href="(.+)">git-repo</a>')
 
 def build_wheel(wheel_path: Path, index_dir: Path):
@@ -27,3 +29,32 @@ def build_wheel(wheel_path: Path, index_dir: Path):
 
     if not wheel_path.is_file():
         raise ValueError(str(wheel_path))
+
+def create_config(pypi_index: Path, port: int = 8000,
+                  cache_dir=DEFAULT_CACHE_DIR) -> Path:
+    packages = [p for p in pypi_index.glob('*') if p.is_dir()]
+
+    with open(Path(__file__).with_name('config_template.toml')) as f:
+        cfg = f.readlines()
+
+    source_str = 'source = "local_index"\n'
+    custom_lines = []
+    for package in packages:
+        custom_lines.extend([
+            f"[routes.\"{package.name}\"]\n",
+            source_str,
+            f"to = '{str(pypi_index / package.name)}'\n",
+            '\n',
+        ])
+    cfg = cfg[:1] + custom_lines + cfg[2:]
+
+    if port is not None:
+        cfg[-1] = f"port = {port}\n"
+
+    cache_dir = Path(cache_dir)
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    cfg_path = cache_dir.joinpath('config.toml')
+    with open(cfg_path, 'w', encoding='utf-8') as f:
+        f.writelines(cfg)
+
+    return cfg_path
