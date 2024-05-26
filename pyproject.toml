@@ -24,3 +24,6 @@ Issues = "https://github.com/zhaochow/pypi-router/issues"
 
 [project.scripts]
 pypi_router = "pypi_router.main:main"
+
+[project.entry-points."simpleindex.routes"]
+local_index = "pypi_router.main:LocalIndexRoute"
