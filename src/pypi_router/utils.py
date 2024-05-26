@@ -1,10 +1,15 @@
+import hashlib
 from packaging.utils import parse_wheel_filename
 from pathlib import Path
 import re
+import shutil
 import subprocess
 import sys
 
+import toml
+
 DEFAULT_CACHE_DIR = str(Path.home().joinpath('.cache', 'pypi-router'))
+DEFAULT_OUT_DIR = str(Path().cwd())
 
 _GIT_REPO_PATTERN = re.compile(r'<a href="(.+)">git-repo</a>')
 
@@ -29,6 +34,147 @@ def build_wheel(wheel_path: Path, index_dir: Path):
 
     if not wheel_path.is_file():
         raise ValueError(str(wheel_path))
+
+def create_index(package_list: str, index_dir=DEFAULT_OUT_DIR,
+                 cache_dir=DEFAULT_CACHE_DIR) -> Path:
+    index_dir = Path(index_dir)
+    cache_dir = Path(cache_dir)
+
+    with open(package_list) as f:
+        git_repos = [l.strip(' \n') for l in f.readlines()]
+
+    package_names: list[str] = [None] * len(git_repos)
+    for i, repo in enumerate(git_repos):
+        repo_dir = _git_clone(repo, cache_dir)
+
+        with open(repo_dir / 'pyproject.toml', 'rb') as f:
+            pyproject = toml.load(f)
+        package_name: str = pyproject['project']['name']
+        package_names[i] = package_name
+        print(f"Copy of package {package_name} at " + str(repo_dir))
+
+        pkg_index_dir = index_dir / package_name
+        pkg_index_dir.mkdir(parents=True, exist_ok=True)
+
+        builds = _build_all_version_tags(repo_dir,
+                                         metadata_dst_dir=pkg_index_dir)
+        wheel_names, metadata_hashes = tuple(zip(*(b[1:3] for b in builds)))
+
+        pkg_index = pkg_index_dir / 'index.html'
+        html = _build_index_html(wheel_names, metadata_hashes=metadata_hashes,
+                                 git_repo=repo)
+        with open(pkg_index, 'w', encoding='utf-8') as f:
+            f.write(html)
+
+    html = _build_index_html([f"/{n}/" for n in package_names])
+    with open(index_dir / 'index.html', 'w', encoding='utf-8') as f:
+        f.write(html)
+
+_GIT_CLONE_OK_PATTERN = re.compile(r"^Cloning into '(.+)'...$")
+_GIT_CLONE_EXIST_PATTERN = re.compile(
+    r"^fatal: destination path '(.+)' already exists and is not an empty "
+    r"directory.$"
+)
+
+def _git_clone(repo: str, working_dir: Path):
+    p = subprocess.run(['git', 'clone', repo], cwd=working_dir,
+                       capture_output=True, text=True)
+    if p.returncode == 0:
+        repo_reldir = _GIT_CLONE_OK_PATTERN.match(p.stderr).group(1)
+    elif p.returncode == 128:
+        repo_reldir = _GIT_CLONE_EXIST_PATTERN.match(p.stderr).group(1)
+    else:
+        p.check_returncode()
+    return working_dir.joinpath(repo_reldir)
+
+def _build_all_version_tags(repo: Path, metadata_dst_dir: Path = None):
+    p = subprocess.run(['git', 'tag'], cwd=repo, capture_output=True,
+                       text=True, check=True)
+    vtags = [tag for tag in p.stdout.split('\n') if tag.startswith('v')]
+    print('Found the following version tags:\n' + '\n'.join(vtags) + '\n')
+    builds = []
+    for vtag in vtags:
+        wheel_name, metadata_src = _build_package(repo, vtag)
+        hash = get_hash_name_value(metadata_src)
+        if metadata_dst_dir is not None:
+            metadata_dst = metadata_dst_dir / (wheel_name + '.metadata')
+            shutil.copy2(metadata_src, metadata_dst)
+            assert get_hash_name_value(metadata_dst) == hash
+        builds.append((vtag, wheel_name, hash))
+    return builds
+
+_METADATA_PATH_PATTERN = re.compile(r"^writing (.+\.egg-info\\PKG-INFO)$",
+                                    flags=re.MULTILINE)
+_WHEEL_NAME_PATTERN = re.compile(r"^Successfully built (.+\.whl)$",
+                                 flags=re.MULTILINE)
+
+def _build_package(repo: Path, tag: str):
+    # # Get commit hash from tag
+    # p = subprocess.run(['git', 'rev-list', '-n', '1', tag], cwd=repo,
+    #                    capture_output=True, text=True, check=True)
+    # commit = p.stdout
+
+    subprocess.run(['git', 'checkout', tag], cwd=repo, check=True)
+    p = subprocess.run([sys.executable, '-m', 'build', '-w'], cwd=repo,
+                       capture_output=True, text=True, check=True)
+    metadata_src = _METADATA_PATH_PATTERN.search(p.stdout).group(1)
+    metadata_src = repo.joinpath(metadata_src)
+    wheel_name = _WHEEL_NAME_PATTERN.search(p.stdout).group(1)
+    print(f"Built {wheel_name}\n")
+
+    return wheel_name, metadata_src
+
+_BUF_SIZE = 65536
+
+def get_hash_name_value(filepath):
+    sha256 = hashlib.sha256()
+    with open(filepath, 'rb') as f:
+        while True:
+            data = f.read(_BUF_SIZE)
+            if not data:
+                break
+            sha256.update(data)
+    return f"sha256={sha256.hexdigest()}"
+
+_INDEX_HTML_TEMPLATE = """<!DOCTYPE html>
+<html>
+  <body>
+{anchors}
+  </body>
+</html>
+"""
+
+def _create_anchor(name, href=None, hash=None, metadata_hash=None):
+    if href is None: href = name
+    a = f"href=\"{href}"
+    if hash is not None:
+        a += f"#{hash}"
+    a += '"'
+    if metadata_hash is not None:
+        a += f" data-core-metadata=\"{metadata_hash}\""
+    a = f"<a {a}>{name}</a><br>"
+    return a
+
+_ANCHOR_INDENT = ' ' * 4
+
+def _build_index_html(names, hrefs=None, hashes=None, metadata_hashes=None,
+                      git_repo=None):
+    def none_iter():
+        while True:
+            yield None
+
+    if hrefs is None: hrefs = none_iter()
+    if hashes is None: hashes = none_iter()
+    if metadata_hashes is None: metadata_hashes = none_iter()
+
+    anchors = []
+    if git_repo is not None:
+        anchors.append(_create_anchor('git-repo', href=git_repo))
+    anchors.extend([_create_anchor(*args)
+                    for args in zip(names, hrefs, hashes, metadata_hashes)])
+
+    anchors = _ANCHOR_INDENT + f"\n{_ANCHOR_INDENT}".join(anchors)
+    return _INDEX_HTML_TEMPLATE.format(anchors=anchors)
 
 def create_config(pypi_index: Path, port: int = 8000,
                   cache_dir=DEFAULT_CACHE_DIR) -> Path:
