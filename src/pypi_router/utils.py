@@ -101,7 +101,7 @@ def _build_all_version_tags(
         index_path = metadata_dst_dir / 'index.html'
         if index_path.is_file() and not rebuild:
             versions_info = _parse_index_html(index_path)
-            pattern = f"{metadata_dst_dir.name}-([^-]+)-.+\.whl"
+            pattern = metadata_dst_dir.name + r'-([^-]+)-.+\.whl'
             for info in versions_info:
                 wheel_name = info[0]
                 vtag = 'v' + re.match(pattern, wheel_name).group(1)
