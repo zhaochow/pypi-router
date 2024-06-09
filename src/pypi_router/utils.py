@@ -169,19 +169,20 @@ _INDEX_HTML_TEMPLATE = """<!DOCTYPE html>
   </body>
 </html>
 """
+_ANCHOR_TEMPLATE = '<a href="{href}{hash}"{metadata}>{name}</a><br>'
+_ANCHOR_INDENT = ' ' * 4
 
 def _create_anchor(name, href=None, hash=None, metadata_hash=None):
-    if href is None: href = name
-    a = f"href=\"{href}"
-    if hash is not None:
-        a += f"#{hash}"
-    a += '"'
-    if metadata_hash is not None:
-        a += f" data-core-metadata=\"{metadata_hash}\""
-    a = f"<a {a}>{name}</a><br>"
+    if href is None:
+        href = name
+    hash = '' if hash is None else f"#{hash}"
+    if metadata_hash is None:
+        metadata = ''
+    else:
+        metadata = f" data-core-metadata=\"{metadata_hash}\""
+    a = _ANCHOR_TEMPLATE.format(href=href, hash=hash, metadata=metadata,
+                                name=name)
     return a
-
-_ANCHOR_INDENT = ' ' * 4
 
 def _build_index_html(names, hrefs=None, hashes=None, metadata_hashes=None,
                       git_repo=None):
