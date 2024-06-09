@@ -214,9 +214,12 @@ def _parse_index_html(path: Union[str, Path]):
     versions_info = pattern.findall(html)
     return versions_info
 
-def create_config(pypi_index: Path, port: int = 8000,
-                  cache_dir=DEFAULT_CACHE_DIR) -> Path:
+def make_config(config_path: Union[str, Path], pypi_index: Union[str, Path],
+                port: int = 8000):
+    pypi_index = Path(pypi_index)
     packages = [p for p in pypi_index.glob('*') if p.is_dir()]
+    if len(packages) < 1:
+        print(f"Warning: no package found at {str(pypi_index)}")
 
     with open(Path(__file__).with_name('config_template.toml')) as f:
         cfg = f.readlines()
@@ -230,15 +233,13 @@ def create_config(pypi_index: Path, port: int = 8000,
             f"to = '{str(pypi_index / package.name)}'\n",
             '\n',
         ])
-    cfg = cfg[:1] + custom_lines + cfg[2:]
+    if len(custom_lines) > 0:
+        cfg = cfg[:1] + custom_lines + cfg[2:]
 
     if port is not None:
         cfg[-1] = f"port = {port}\n"
 
-    cache_dir = Path(cache_dir)
-    cache_dir.mkdir(parents=True, exist_ok=True)
-    cfg_path = cache_dir.joinpath('config.toml')
+    cfg_path = Path(config_path)
+    cfg_path.parent.mkdir(parents=True, exist_ok=True)
     with open(cfg_path, 'w', encoding='utf-8') as f:
         f.writelines(cfg)
-
-    return cfg_path
