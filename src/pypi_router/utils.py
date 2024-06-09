@@ -35,8 +35,9 @@ def build_wheel(wheel_path: Path, index_dir: Path):
     if not wheel_path.is_file():
         raise ValueError(str(wheel_path))
 
-def create_index(package_list: str, index_dir=DEFAULT_OUT_DIR,
-                 cache_dir=DEFAULT_CACHE_DIR) -> Path:
+def make_index(index_dir: Union[str, Path], package_list: Union[str, Path],
+               cache_dir: Union[str, Path] = DEFAULT_CACHE_DIR,
+               rebuild: bool = False):
     index_dir = Path(index_dir)
     cache_dir = Path(cache_dir)
 
@@ -56,9 +57,10 @@ def create_index(package_list: str, index_dir=DEFAULT_OUT_DIR,
         pkg_index_dir = index_dir / package_name
         pkg_index_dir.mkdir(parents=True, exist_ok=True)
 
-        builds = _build_all_version_tags(repo_dir,
-                                         metadata_dst_dir=pkg_index_dir)
-        wheel_names, metadata_hashes = tuple(zip(*(b[1:3] for b in builds)))
+        versions = _build_all_version_tags(
+            repo_dir, metadata_dst_dir=pkg_index_dir, rebuild=rebuild
+        )
+        wheel_names, metadata_hashes = tuple(zip(*versions))
 
         pkg_index = pkg_index_dir / 'index.html'
         html = _build_index_html(wheel_names, metadata_hashes=metadata_hashes,
@@ -88,21 +90,44 @@ def _git_clone(repo: str, working_dir: Path):
         p.check_returncode()
     return working_dir.joinpath(repo_reldir)
 
-def _build_all_version_tags(repo: Path, metadata_dst_dir: Path = None):
+def _build_all_version_tags(
+    repo: Path,
+    metadata_dst_dir: Union[Path, None] = None,
+    rebuild: bool = False
+):
+    versions: dict[str, list[tuple[str, str]]] = {}
+
+    if metadata_dst_dir is not None:
+        index_path = metadata_dst_dir / 'index.html'
+        if index_path.is_file() and not rebuild:
+            versions_info = _parse_index_html(index_path)
+            pattern = f"{metadata_dst_dir.name}-([^-]+)-.+\.whl"
+            for info in versions_info:
+                wheel_name = info[0]
+                vtag = 'v' + re.match(pattern, wheel_name).group(1)
+                versions.setdefault(vtag, [])
+                versions[vtag].append((wheel_name, info[2]))
+
+            tmp = [b[0] for builds in versions.values() for b in builds]
+            print(f"Found existing package versions in index.html:\n"
+                  + '\n'.join(tmp) + '\n')
+
     p = subprocess.run(['git', 'tag'], cwd=repo, capture_output=True,
                        text=True, check=True)
     vtags = [tag for tag in p.stdout.split('\n') if tag.startswith('v')]
     print('Found the following version tags:\n' + '\n'.join(vtags) + '\n')
-    builds = []
-    for vtag in vtags:
-        wheel_name, metadata_src = _build_package(repo, vtag)
+
+    vtags_to_build = [t for t in vtags if t not in versions]
+    for vtag in vtags_to_build:
+        wheel_name, metadata_src = _build_package(repo, vtag) # TODO multiple builds for same tag
         hash = get_hash_name_value(metadata_src)
         if metadata_dst_dir is not None:
             metadata_dst = metadata_dst_dir / (wheel_name + '.metadata')
             shutil.copy2(metadata_src, metadata_dst)
             assert get_hash_name_value(metadata_dst) == hash
-        builds.append((vtag, wheel_name, hash))
-    return builds
+        versions[vtag] = [(wheel_name, hash)]
+
+    return [b for t in vtags for b in versions[t]]
 
 _METADATA_PATH_PATTERN = re.compile(r"^writing (.+\.egg-info\\PKG-INFO)$",
                                     flags=re.MULTILINE)
