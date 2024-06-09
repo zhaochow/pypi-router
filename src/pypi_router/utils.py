@@ -203,6 +203,17 @@ def _build_index_html(names, hrefs=None, hashes=None, metadata_hashes=None,
     anchors = _ANCHOR_INDENT + f"\n{_ANCHOR_INDENT}".join(anchors)
     return _INDEX_HTML_TEMPLATE.format(anchors=anchors)
 
+def _parse_index_html(path: Union[str, Path]):
+    with open(path, 'r', encoding='utf-8') as f:
+        html = f.read()
+
+    pattern = re.compile(_ANCHOR_TEMPLATE.format(
+        href=r'([^"#]+\.whl)', hash=r'(?:#([^"#]+))?',
+        metadata=r'(?: data-core-metadata="([^"]+)")?', name=r'([^<]+)'
+    ))
+    versions_info = pattern.findall(html)
+    return versions_info
+
 def create_config(pypi_index: Path, port: int = 8000,
                   cache_dir=DEFAULT_CACHE_DIR) -> Path:
     packages = [p for p in pypi_index.glob('*') if p.is_dir()]
