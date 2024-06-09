@@ -77,6 +77,7 @@ _GIT_CLONE_EXIST_PATTERN = re.compile(
 )
 
 def _git_clone(repo: str, working_dir: Path):
+    working_dir.mkdir(parents=True, exist_ok=True)
     p = subprocess.run(['git', 'clone', repo], cwd=working_dir,
                        capture_output=True, text=True)
     if p.returncode == 0:
