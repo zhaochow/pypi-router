@@ -152,7 +152,7 @@ def _build_package(repo: Path, tag: str):
 
 _BUF_SIZE = 65536
 
-def get_hash_name_value(filepath):
+def get_hash_name_value(filepath: Union[str, Path]):
     sha256 = hashlib.sha256()
     with open(filepath, 'rb') as f:
         while True:
