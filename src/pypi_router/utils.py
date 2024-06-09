@@ -5,6 +5,7 @@ import re
 import shutil
 import subprocess
 import sys
+from typing import Union
 
 import toml
 
@@ -172,7 +173,7 @@ _INDEX_HTML_TEMPLATE = """<!DOCTYPE html>
 _ANCHOR_TEMPLATE = '<a href="{href}{hash}"{metadata}>{name}</a><br>'
 _ANCHOR_INDENT = ' ' * 4
 
-def _create_anchor(name, href=None, hash=None, metadata_hash=None):
+def _html_anchor(name, href=None, hash=None, metadata_hash=None):
     if href is None:
         href = name
     hash = '' if hash is None else f"#{hash}"
@@ -196,8 +197,8 @@ def _build_index_html(names, hrefs=None, hashes=None, metadata_hashes=None,
 
     anchors = []
     if git_repo is not None:
-        anchors.append(_create_anchor('git-repo', href=git_repo))
-    anchors.extend([_create_anchor(*args)
+        anchors.append(_html_anchor('git-repo', href=git_repo))
+    anchors.extend([_html_anchor(*args)
                     for args in zip(names, hrefs, hashes, metadata_hashes)])
 
     anchors = _ANCHOR_INDENT + f"\n{_ANCHOR_INDENT}".join(anchors)
