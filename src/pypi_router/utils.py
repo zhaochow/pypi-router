@@ -48,7 +48,7 @@ def make_index(index_dir: Union[str, Path], package_list: Union[str, Path],
     for i, repo in enumerate(git_repos):
         repo_dir = _git_clone(repo, cache_dir)
 
-        with open(repo_dir / 'pyproject.toml', 'rb') as f:
+        with open(repo_dir / 'pyproject.toml', 'r', encoding='utf-8') as f:
             pyproject = toml.load(f)
         package_name: str = pyproject['project']['name']
         package_names[i] = package_name
