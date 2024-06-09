@@ -10,7 +10,6 @@ from typing import Union
 import toml
 
 DEFAULT_CACHE_DIR = str(Path.home().joinpath('.cache', 'pypi-router'))
-DEFAULT_OUT_DIR = str(Path().cwd())
 
 _GIT_REPO_PATTERN = re.compile(r'<a href="(.+)">git-repo</a>')
 
