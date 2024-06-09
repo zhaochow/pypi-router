@@ -49,30 +49,31 @@ def main(args: Union[Sequence[str], None] = None):
     parser.add_argument('--cache-dir', default=str(_cache_dir),
                         help='Cache directory')
     parser.add_argument('--port', type=int, help='simpleindex port')
+    parser.add_argument('--rebuild', action='store_true',
+                        help='Rebuild the entire custom index')
     args = parser.parse_args(args)
 
+    cwd = Path().cwd()
     _cache_dir = Path(args.cache_dir).resolve()
 
-    if args.config is None:
-        if args.pypi_index is None:
-            if args.package_list is None:
-                raise ValueError('At least one of (--package-list | '
-                                 '--pypi-index | --config) should be given')
-            pypi_index = ut.create_index(args.package_list,
-                                         cache_dir=_cache_dir)
-        else:
-            pypi_index = Path(args.pypi_index).resolve()
-            if not pypi_index.is_dir():
-                if args.package_list is None:
-                    raise FileExistsError(f"{str(pypi_index)} does not exist")
-                ut.create_index(args.package_list, index_dir=pypi_index,
-                                cache_dir=_cache_dir)
-        cfg_path = ut.create_config(pypi_index, port=args.port,
-                                    cache_dir=_cache_dir)
-    else:
-        cfg_path = Path(args.config).resolve()
+    pypi_index = args.pypi_index
+    if args.package_list is not None:
+        if pypi_index is None:
+            pypi_index = cwd / 'pypi_index'
+        ut.make_index(pypi_index, args.package_list, cache_dir=_cache_dir,
+                      rebuild=args.rebuild)
 
-    simpleindex.run([str(cfg_path)])
+    cfg_path = args.config
+    if pypi_index is not None:
+        if cfg_path is None:
+            cfg_path = cwd / 'config.toml'
+        ut.make_config(cfg_path, pypi_index, port=args.port)
+
+    if cfg_path is None:
+        raise ValueError('At least one of (--package-list | --pypi-index | '
+                         '--config) should be given')
+    else:
+        simpleindex.run([str(cfg_path)])
 
 if __name__ == '__main__':
     main()
