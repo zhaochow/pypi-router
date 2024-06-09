@@ -1,5 +1,6 @@
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 from pathlib import Path
+from typing import Sequence, Union
 
 import simpleindex
 from simpleindex.routes import Response, Route, Params
@@ -38,9 +39,8 @@ class LocalIndexRoute(Route):
         data = path.read_bytes()
         return Response(status_code=200, content=data, media_type=media_type)
 
-def main(*args):
+def main(args: Union[Sequence[str], None] = None):
     global _cache_dir
-    if len(args) < 1: args = None
     parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
     parser.add_argument('-l', '--package-list',
                         help='Path to package list file')
