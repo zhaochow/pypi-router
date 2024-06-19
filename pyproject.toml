@@ -7,7 +7,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pypi-router"
-version = "0.1.0rc0"
+version = "0.1.0rc1"
 authors = [
   { name="zhaochow", email="zhaowen04@gmail.com" },
 ]
