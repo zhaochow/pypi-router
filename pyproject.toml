@@ -7,7 +7,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pypi-router"
-version = "0.1.0"
+version = "0.1.0rc1"
 authors = [
   { name="zhaochow", email="zhaowen04@gmail.com" },
 ]
@@ -15,6 +15,7 @@ description = "Simple package for routing Python packages to specific indexes"
 readme = "README.md"
 requires-python = ">=3.8"
 dependencies = [
+  "build",
   "simpleindex",
 ]
 
@@ -24,3 +25,6 @@ Issues = "https://github.com/zhaochow/pypi-router/issues"
 
 [project.scripts]
 pypi_router = "pypi_router.main:main"
+
+[project.entry-points."simpleindex.routes"]
+local_index = "pypi_router.routing:LocalIndexRoute"
